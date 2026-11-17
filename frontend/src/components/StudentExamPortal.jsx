@@ -4,7 +4,7 @@ import {
   Send, HelpCircle, FileText, CheckCircle, Award, LayoutDashboard, ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { examsAPI } from '../services/api';
+import { examsAPI, BACKEND_URL } from '../services/api';
 import Logo from './Logo';
 
 export default function StudentExamPortal({ initialCode = '', onExit }) {
@@ -401,7 +401,7 @@ export default function StudentExamPortal({ initialCode = '', onExit }) {
                   </div>
 
                   <iframe
-                    src={`${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '') || (import.meta.env.PROD ? '' : 'http://localhost:5000')}${examData.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                    src={`${BACKEND_URL}${examData.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
                     className="w-full h-full min-h-[550px] border-0"
                     title="Exam Questions PDF"
                   />

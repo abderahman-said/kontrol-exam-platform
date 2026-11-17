@@ -33,8 +33,23 @@ app.use('/api/student', studentRoutes);
 app.use('/api/students', studentRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Kontrol SaaS Engine', time: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  let dbError = null;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err) {
+    dbError = err.message;
+  }
+  res.json({
+    status: 'ok',
+    service: 'Kontrol SaaS Engine',
+    database: dbStatus,
+    dbError: dbError ? dbError.substring(0, 120) : null,
+    hasDbUrl: !!process.env.DATABASE_URL,
+    time: new Date().toISOString()
+  });
 });
 
 // Seed data تلقائي لتجهيز بيئة الـ SaaS بالكامل (أدمن، مدرس، طالب، باقة اشتراك)
@@ -118,7 +133,11 @@ async function seedDemoData() {
   }
 }
 
-app.listen(PORT, async () => {
-  console.log(`🚀 خادم منصة الـ SaaS يعمل الآن على: http://localhost:${PORT}`);
-  await seedDemoData();
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    console.log(`🚀 خادم منصة الـ SaaS يعمل الآن على: http://localhost:${PORT}`);
+    await seedDemoData();
+  });
+}
+
+module.exports = app;

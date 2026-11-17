@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-// في بيئة الإنتاج على Vercel يُقرأ من متغيرات البيئة VITE_API_BASE_URL، ومحلياً يتصل بـ localhost:5000
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
+// عنوان الباك إند: يُقرأ من VITE_API_BASE_URL في Vercel أو يستخدم الرابط المنشور تلقائياً
+export const BACKEND_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '') || 
+  (import.meta.env.PROD ? 'https://exam-backend-ten.vercel.app' : 'http://localhost:5000');
+
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API_BASE,
