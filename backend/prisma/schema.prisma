@@ -1,0 +1,169 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// مدير النظام الرئيسي (Super Admin)
+model Admin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("SUPER_ADMIN")
+  createdAt    DateTime @default(now())
+}
+
+// المعلم أو إدارة السنتر (Tenant)
+model Teacher {
+  id                   String                @id @default(uuid())
+  name                 String
+  phone                String                @unique
+  passwordHash         String
+  centerName           String?
+  role                 String                @default("TEACHER")
+  
+  // نظام الاشتراكات والفوترة SaaS (40 - 50 ج لكل طالب شهرياً)
+  subscriptionStatus   String                @default("TRIAL") // "TRIAL", "ACTIVE", "EXPIRED"
+  subscriptionExpiresAt DateTime?
+  pricePerStudent      Float                 @default(45.0)    // السعر بالجنيه المصري لكل طالب
+  studentLimit         Int                   @default(30)      // سعة الطلاب الحالية
+  
+  groups               Group[]
+  exams                Exam[]
+  payments             SubscriptionPayment[]
+  createdAt            DateTime              @default(now())
+}
+
+// مدفوعات وفواتير اشتراكات المعلمين
+model SubscriptionPayment {
+  id             String    @id @default(uuid())
+  teacherId      String
+  amount         Float     // المبلغ الإجمالي بالجنيه
+  studentCount   Int       // عدد الطلاب المشمولين
+  periodMonths   Int       @default(1)
+  paymentMethod  String    // "INSTAPAY", "VODAFONE_CASH", "FAWRY", "CARD"
+  transactionRef String?   // رقم التحويل أو إشعار فودافون كاش
+  status         String    @default("APPROVED") // "PENDING", "APPROVED", "REJECTED"
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  teacher        Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+// مجموعة دراسية (فصل أو سنتر تابع للمدرس)
+model Group {
+  id          String       @id @default(uuid())
+  teacherId   String
+  name        String
+  subject     String?
+  teacher     Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  students    Student[]
+  exams       ExamGroup[]
+  createdAt   DateTime     @default(now())
+}
+
+// الطالب (حساب شخصي مستقل للطالب لمتابعة امتحاناته ودرجاته وبنك أخطائه)
+model Student {
+  id           String        @id @default(uuid())
+  groupId      String
+  name         String
+  phone        String?       // موبايل الطالب لتسجيل دخوله المستقل (يدعم تعدد المعلمين)
+  passwordHash String?       // كلمة مرور حساب الطالب
+  studentPhone String?
+  parentPhone  String        // رقم ولي الأمر للواتساب
+  role         String        @default("STUDENT")
+  
+  group        Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attempts     ExamAttempt[]
+  createdAt    DateTime      @default(now())
+}
+
+// الامتحان
+model Exam {
+  id             String        @id @default(uuid())
+  teacherId      String
+  title          String
+  type           String        @default("ANSWER_SHEET") // "ANSWER_SHEET" أو "CUSTOM_QUESTIONS"
+  pdfUrl         String?
+  durationMins   Int           @default(30)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  showAnswers    String        @default("AFTER_DEADLINE")
+  totalDegree    Float         @default(0)
+  passScore      Float?
+  
+  teacher        Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  questions      Question[]
+  groups         ExamGroup[]
+  accessCodes    AccessCode[]
+  attempts       ExamAttempt[]
+  createdAt      DateTime      @default(now())
+}
+
+model ExamGroup {
+  examId    String
+  groupId   String
+  exam      Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@id([examId, groupId])
+}
+
+// الأسئلة ومفاتيح الإجابة
+model Question {
+  id            String          @id @default(uuid())
+  examId        String
+  questionIndex Int
+  text          String?
+  correctAnswer String
+  degree        Float           @default(1.0)
+  explanation   String?
+  exam          Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  answers       StudentAnswer[]
+}
+
+// أكواد الدخول للامتحان
+model AccessCode {
+  id          String    @id @default(uuid())
+  examId      String
+  code        String    @unique
+  studentName String?
+  isUsed      Boolean   @default(false)
+  usedAt      DateTime?
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+// محاولة دخول الطالب للامتحان
+model ExamAttempt {
+  id             String          @id @default(uuid())
+  examId         String
+  studentId      String?
+  studentName    String
+  parentPhone    String?
+  startedAt      DateTime        @default(now())
+  submittedAt    DateTime?
+  score          Float           @default(0)
+  totalDegree    Float           @default(0)
+  isCompleted    Boolean         @default(false)
+  tabSwitchCount Int             @default(0) // مكافحة الغش
+  
+  exam           Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student        Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  answers        StudentAnswer[]
+}
+
+// إجابة الطالب على كل سؤال
+model StudentAnswer {
+  id           String      @id @default(uuid())
+  attemptId    String
+  questionId   String
+  answerGiven  String
+  isCorrect    Boolean     @default(false)
+  degreeEarned Float       @default(0)
+  
+  attempt      ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question     Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
